@@ -176,14 +176,9 @@ class DDPG:
         """
         # TODO (5) implement the actor loss. You have to sample from the replay buffer first a set of states.
 
-        state_batch, action_batch, reward_batch, next_state_batch, terminated_batch, truncated_batch = self.replay_buffer.get(batch)
-        state_batch = torch.FloatTensor(batch).to(device)
-        action_batch = torch.Tensor(batch).to(dtype=torch.long).to(device).unsqueeze(1)
-        next_state_batch = torch.FloatTensor(batch).to(device)
-        reward_batch = torch.FloatTensor(batch).to(device).unsqueeze(1)
-        terminated_batch = torch.FloatTensor(batch).to(dtype=torch.long).to(device).unsqueeze(1)
-        truncated_batch = torch.FloatTensor(batch).to(dtype=torch.long).to(device).unsqueeze(1)
-
+        state_batch, _, _, _, _, _ = batch
+        state_batch = torch.FloatTensor(state_batch).to(device)
+ 
         loss = -self.Critic(state_batch, self.Actor(state_batch)).mean()
         # END TODO (5) 
 
