@@ -104,16 +104,32 @@ class DDPG:
                 # Batch is sampled from the replay buffer and containes a list of tuples (s, a, r, s', term, trunc)
 
                 # Get the batch data
+                state_batch, action_batch, reward_batch, next_state_batch, terminated_batch, truncated_batch = self.replay_buffer.get(self.batch_size)
+
+                state_batch = torch.FloatTensor(state_batch).to(device)
+                action_batch = torch.Tensor(action_batch).to(dtype=torch.long).to(device).unsqueeze(1)
+                next_state_batch = torch.FloatTensor(next_state_batch).to(device)
+                reward_batch = torch.FloatTensor(reward_batch).to(device).unsqueeze(1)
+                terminated_batch = torch.FloatTensor(terminated_batch).to(dtype=torch.long).to(device).unsqueeze(1)
+                truncated_batch = torch.FloatTensor(truncated_batch).to(dtype=torch.long).to(device).unsqueeze(1)
 
                 # Compute the loss for the critic and update the critic network 
-
+                critic_loss = self.compute_critic_loss((state_batch, action_batch, reward_batch, next_state_batch, terminated_batch, truncated_batch))
+                self.optim_dqn.zero_grad()
+                critic_loss.backward()
+                self.optim_dqn.step()
 
                 # Compute the loss for the actor and update the actor network 
+                actor_loss = self.compute_actor_loss((state_batch, action_batch, reward_batch, next_state_batch, terminated_batch, truncated_batch))
+                self.optim_actor.zero_grad()
+                actor_loss.backward()
+                self.optim_actor.step() 
 
                 # END TODO (6)
 
             # TODO (7): Sync the target networks with soft updates and tau=0.001 according to details of the DDPG paper
-
+            soft_update(self.Critic_target, self.Critic, tau=0.001)
+            soft_update(self.Actor_target, self.Actor, tau=0.001)
 
             # END TODO (7)
 
