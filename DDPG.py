@@ -157,11 +157,11 @@ class DDPG:
         # The batch is already sampled from the replay buffer previously (in TODO 6)
         state_batch, action_batch, reward_batch, next_state_batch, terminated_batch, truncated_batch = batch
         state_batch = torch.FloatTensor(state_batch).to(device)
-        action_batch = torch.Tensor(action_batch).to(device).unsqueeze(1)
+        action_batch = torch.FloatTensor(action_batch).to(device)
         next_state_batch = torch.FloatTensor(next_state_batch).to(device)
         reward_batch = torch.FloatTensor(reward_batch).to(device).unsqueeze(1)
-        terminated_batch = torch.FloatTensor(terminated_batch).to(dtype=torch.long).to(device).unsqueeze(1)
-        truncated_batch = torch.FloatTensor(truncated_batch).to(dtype=torch.long).to(device).unsqueeze(1)
+        terminated_batch = torch.FloatTensor(terminated_batch).to(device).unsqueeze(1)
+        truncated_batch = torch.FloatTensor(truncated_batch).to(device).unsqueeze(1)
 
         with torch.no_grad():
             q_targets_next = self.Critic_target(next_state_batch, self.Actor_target(next_state_batch))                                              
