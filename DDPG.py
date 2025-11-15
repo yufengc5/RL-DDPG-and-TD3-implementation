@@ -8,7 +8,6 @@ from ReplayBuffer import ReplayBuffer
 from helper import episode_reward_plot, video_agent
 import numpy as np
 from Noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise
-import gymnasium as gym
 from gymnasium.wrappers import RecordVideo
 
 
@@ -47,6 +46,9 @@ class DDPG:
         # Initialize Actor network and its target network. Should be named self.Actor
         self.Actor = ActorNetwork(self.obs_dim, self.act_dim).to(device)
         self.Actor_target = ActorNetwork(self.obs_dim, self.act_dim).to(device)
+
+        copy_target(self.Critic_target, self.Critic)
+        copy_target(self.Actor_target, self.Actor)
 
         # END TODO (2)
 
