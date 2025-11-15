@@ -105,14 +105,6 @@ class DDPG:
 
                 # Get the batch data
                 state_batch, action_batch, reward_batch, next_state_batch, terminated_batch, truncated_batch = self.replay_buffer.get(self.batch_size)
-
-                state_batch = torch.FloatTensor(state_batch).to(device)
-                action_batch = torch.Tensor(action_batch).to(dtype=torch.long).to(device).unsqueeze(1)
-                next_state_batch = torch.FloatTensor(next_state_batch).to(device)
-                reward_batch = torch.FloatTensor(reward_batch).to(device).unsqueeze(1)
-                terminated_batch = torch.FloatTensor(terminated_batch).to(dtype=torch.long).to(device).unsqueeze(1)
-                truncated_batch = torch.FloatTensor(truncated_batch).to(dtype=torch.long).to(device).unsqueeze(1)
-
                 # Compute the loss for the critic and update the critic network 
                 critic_loss = self.compute_critic_loss((state_batch, action_batch, reward_batch, next_state_batch, terminated_batch, truncated_batch))
                 self.optim_dqn.zero_grad()
@@ -165,7 +157,7 @@ class DDPG:
         # The batch is already sampled from the replay buffer previously (in TODO 6)
         state_batch, action_batch, reward_batch, next_state_batch, terminated_batch, truncated_batch = batch
         state_batch = torch.FloatTensor(state_batch).to(device)
-        action_batch = torch.Tensor(action_batch).to(dtype=torch.long).to(device).unsqueeze(1)
+        action_batch = torch.Tensor(action_batch).to(device).unsqueeze(1)
         next_state_batch = torch.FloatTensor(next_state_batch).to(device)
         reward_batch = torch.FloatTensor(reward_batch).to(device).unsqueeze(1)
         terminated_batch = torch.FloatTensor(terminated_batch).to(dtype=torch.long).to(device).unsqueeze(1)
