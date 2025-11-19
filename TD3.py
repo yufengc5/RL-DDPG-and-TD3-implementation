@@ -15,8 +15,8 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 
-class DDPG:
-    """The DDPG Agent."""
+class TD3:
+    """The TD3 Agent."""
 
     def __init__(self, env, replay_size=1000000, batch_size=32, gamma=0.99):
         """ Initializes the DQN method.
@@ -39,22 +39,27 @@ class DDPG:
         self.batch_size = batch_size
         self.gamma = gamma
 
-        # TODO (2): Initialize the Actor and Critic networks. 
-        # Initialize Critic network and target network. Should be named self.Critic 
-        self.Critic = CriticNetwork(self.obs_dim, self.act_dim).to(device)
-        self.Critic_target = CriticNetwork(self.obs_dim, self.act_dim).to(device)
-        # Initialize Actor network and its target network. Should be named self.Actor
+        # Initialize Actor network and its target network.
         self.Actor = ActorNetwork(self.obs_dim, self.act_dim).to(device)
         self.Actor_target = ActorNetwork(self.obs_dim, self.act_dim).to(device)
 
-        copy_target(self.Critic_target, self.Critic)
+        # CHANGE 1: Initialize two Critic networks and their target networks.
+        self.Critic1 = CriticNetwork(self.obs_dim, self.act_dim).to(device)
+        self.Critic1_target = CriticNetwork(self.obs_dim, self.act_dim).to(device)
+
+        self.Critic2 = CriticNetwork(self.obs_dim, self.act_dim).to(device)
+        self.Critic2_target = CriticNetwork(self.obs_dim, self.act_dim).to(device)
+
         copy_target(self.Actor_target, self.Actor)
+        copy_target(self.Critic1_target, self.Critic1)
+        copy_target(self.Critic2_target, self.Critic2)
 
-        # END TODO (2)
 
-        # Define the optimizers for the actor and critic networks as proposed in the paper
-        self.optim_critic = optim.Adam(self.Critic.parameters(), lr=0.001, weight_decay=0.01) 
-        self.optim_actor = optim.Adam(self.Actor.parameters(), lr=0.0001) 
+        # CHANGE 2: The actor network have a lower learning rate as proposed in the TD3 paper
+        self.optim_actor = optim.Adam(self.Actor.parameters(), lr=0.001) 
+        # CHANGE 3: The critic networks do not have weight decay in TD3
+        self.optim_critic1 = optim.Adam(self.Critic1.parameters(), lr=0.001) 
+        self.optim_critic2 = optim.Adam(self.Critic2.parameters(), lr=0.001)
 
 
     def learn(self, timesteps):
@@ -72,11 +77,8 @@ class DDPG:
         all_rewards_eval = []
         timeexit = timesteps
 
-        # We use here OUNoise instead of Gaussian to add some exploration to the agent. OU noise is a stochastic process
-        # that generates a random sample from a Gaussian distribution whose value at time t depends on the previous value
-        # x(t) and the time elapsed since the previous value y(t). It helps to explore the environment better than Gaussian noise.
-        # This line initializes the noise with mean 0 and sigma 0.15 (see Noise.py file)
-        OUNoise =  OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.act_dim))
+        # CHANGE 4: We use Normal Action Noise with mean 0 and std 0.1 as proposed in the TD3 paper
+        NANoise =  NormalActionNoise(mean=np.zeros(self.act_dim), sigma=0.1*np.ones(self.act_dim))
 
         obs, _ = self.env.reset()
         for timestep in range(1, timesteps + 1):
@@ -121,9 +123,9 @@ class DDPG:
 
                 # END TODO (6)
 
-            # TODO (7): Sync the target networks with soft updates and tau=0.001 according to details of the DDPG paper
-            soft_update(self.Critic_target, self.Critic, tau=0.001)
-            soft_update(self.Actor_target, self.Actor, tau=0.001)
+            # The target networks have an update rate of 5*0.001 as proposed in the TD3 paper
+            soft_update(self.Critic_target, self.Critic, tau=5*0.001)
+            soft_update(self.Actor_target, self.Actor, tau=5^0.001)
 
             # END TODO (7)
 
@@ -217,9 +219,10 @@ if __name__ == '__main__':
     # Create gym environment
     env = gym.make("LunarLander-v3",continuous=True, render_mode='rgb_array')
 
-    ddpg = DDPG(env,replay_size=1000000, batch_size=64, gamma=0.99)
+    # We change the batch size to 100
+    td3 = TD3(env,replay_size=1000000, batch_size=100, gamma=0.99)
 
-    ddpg.learn(500000)
+    td3.learn(500000)
     env = RecordVideo(gym.make("LunarLander-v3",continuous=True, render_mode='rgb_array'),'video')    
-    video_agent(env, ddpg,n_episodes=5)  
+    video_agent(env, td3,n_episodes=5)  
     pass
