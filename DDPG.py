@@ -165,9 +165,8 @@ class DDPG:
         terminated_batch = torch.FloatTensor(terminated_batch).to(device).unsqueeze(1)
         truncated_batch = torch.FloatTensor(truncated_batch).to(device).unsqueeze(1)
 
-        with torch.no_grad():
-            q_targets_next = self.Critic_target(next_state_batch, self.Actor_target(next_state_batch))                                              
-            target = reward_batch + (1-(terminated_batch)) *self.gamma*q_targets_next
+        q_targets_next = self.Critic_target(next_state_batch, self.Actor_target(next_state_batch))                                              
+        target = reward_batch + (1-(terminated_batch)) *self.gamma*q_targets_next
         q_expected = self.Critic(state_batch, action_batch)
 
         criterion = nn.MSELoss()
