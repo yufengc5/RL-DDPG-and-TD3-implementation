@@ -74,7 +74,7 @@ class TD3:
         timesteps: int
             Number of timesteps to optimize the DQN network.
         """
-        self.iter_count += 1
+        
         all_rewards = []
         episode_rewards = []
         all_rewards_eval = []
@@ -85,7 +85,7 @@ class TD3:
 
         obs, _ = self.env.reset()
         for timestep in range(1, timesteps + 1):
-
+            self.iter_count += 1
             action = self.choose_action(obs)
 
             # Here we sample and add the noise to the action to explore the environment. Notice we clip the action
@@ -113,14 +113,12 @@ class TD3:
                 # Get the batch data
                 state_batch, action_batch, reward_batch, next_state_batch, terminated_batch, truncated_batch = self.replay_buffer.get(self.batch_size)
                 # Compute the loss for the critics and update the critics networks
-                critic_loss1 = self.compute_critic_loss((state_batch, action_batch, reward_batch, next_state_batch, terminated_batch, truncated_batch))
+                critic_loss1, critic_loss2 = self.compute_critic_loss((state_batch, action_batch, reward_batch, next_state_batch, terminated_batch, truncated_batch))
                 self.optim_critic1.zero_grad()
-                critic_loss1.backward()
-                self.optim_critic1.step()
-
-                critic_loss2 = self.compute_critic_loss((state_batch, action_batch, reward_batch, next_state_batch, terminated_batch, truncated_batch))
                 self.optim_critic2.zero_grad()
-                critic_loss2.backward()
+                critic_loss = critic_loss1 + critic_loss2
+                critic_loss.backward()
+                self.optim_critic1.step()
                 self.optim_critic2.step()
 
                 if self.iter_count % self.delay == 0:
@@ -171,18 +169,18 @@ class TD3:
 
 
         # CHANGE 5: Use the minimum of the two critic target networks to compute the target Q values
-        q_targets_next1 = self.Critic1_target(next_state_batch, self.Actor_target(next_state_batch))
-        q_targets_next2 = self.Critic2_target(next_state_batch, self.Actor_target(next_state_batch))
-        q_targets_next = torch.min(q_targets_next1, q_targets_next2)
-        target = reward_batch + (1-(terminated_batch)) *self.gamma*q_targets_next
+        with torch.no_grad():
+            q_targets_next1 = self.Critic1_target(next_state_batch, self.Actor_target(next_state_batch))
+            q_targets_next2 = self.Critic2_target(next_state_batch, self.Actor_target(next_state_batch))
+            q_targets_next = torch.min(q_targets_next1, q_targets_next2)
+            target = reward_batch + (1-(terminated_batch)) *self.gamma*q_targets_next
         q_expected1 = self.Critic1(state_batch, action_batch)  
         q_expected2 = self.Critic2(state_batch, action_batch)
         criterion = nn.MSELoss()
         loss1 = criterion(q_expected1, target)  
         loss2 = criterion(q_expected2, target)
-        loss = loss1 + loss2
 
-        return loss
+        return loss1, loss2
     
 
     def compute_actor_loss(self,batch):
@@ -197,7 +195,7 @@ class TD3:
         state_batch, _, _, _, _, _ = batch
         state_batch = torch.FloatTensor(state_batch).to(device)
  
-        loss = -self.Critic(state_batch, self.Actor(state_batch)).mean()
+        loss = -self.Critic1(state_batch, self.Actor(state_batch)).mean()
 
         return loss
 
