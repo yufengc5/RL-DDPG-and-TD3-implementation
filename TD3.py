@@ -40,6 +40,7 @@ class TD3:
         self.gamma = gamma
         self.delay = 2
         self.iter_count = 0
+        self.noise_clip = 0.5
 
         # Initialize Actor network and its target network.
         self.Actor = ActorNetwork(self.obs_dim, self.act_dim).to(device)
@@ -90,7 +91,9 @@ class TD3:
 
             # Here we sample and add the noise to the action to explore the environment. Notice we clip the action
             # between -1 and 1 because the action space is continuous and bounded between -1 and 1.
-            epsilon= NANoise.sample()
+            
+            # The noise is also clipped as proposed in the TD3 paper (NOT EXECUTED YET)
+            epsilon= NANoise.sample().clip(-self.noise_clip, self.noise_clip)
             action = np.clip(action + epsilon, -1, 1)
 
             next_obs, reward, terminated, truncated, _ = self.env.step(action)
