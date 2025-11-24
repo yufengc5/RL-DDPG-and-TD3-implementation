@@ -19,7 +19,7 @@ class DDPG:
     """The DDPG Agent."""
 
     def __init__(self, env, replay_size=1000000, batch_size=32, gamma=0.99):
-        """ Initializes the DQN method.
+        """ Initializes the DDPG method.
         
         Parameters
         ----------
@@ -70,8 +70,7 @@ class DDPG:
         all_rewards = []
         episode_rewards = []
         all_rewards_eval = []
-        timeexit = timesteps
-
+        
         # We use here OUNoise instead of Gaussian to add some exploration to the agent. OU noise is a stochastic process
         # that generates a random sample from a Gaussian distribution whose value at time t depends on the previous value
         # x(t) and the time elapsed since the previous value y(t). It helps to explore the environment better than Gaussian noise.
@@ -102,7 +101,7 @@ class DDPG:
                 episode_rewards = []
                     
             if len(self.replay_buffer) > self.batch_size:
-                #TODO (6): if there is enouygh data in the replay buffer, sample a batch and perform an optimization step
+                #TODO (6): if there is enough data in the replay buffer, sample a batch and perform an optimization step
                 # Batch is sampled from the replay buffer and containes a list of tuples (s, a, r, s', term, trunc)
 
                 # Get the batch data

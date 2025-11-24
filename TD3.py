@@ -19,7 +19,7 @@ class TD3:
     """The TD3 Agent."""
 
     def __init__(self, env, replay_size=1000000, batch_size=32, gamma=0.99):
-        """ Initializes the DQN method.
+        """ Initializes the TD3 method.
         
         Parameters
         ----------
@@ -79,7 +79,6 @@ class TD3:
         all_rewards = []
         episode_rewards = []
         all_rewards_eval = []
-        timeexit = timesteps
 
         # CHANGE 4: We use Normal Action Noise with mean 0 and std 0.1 as proposed in the TD3 paper
         NANoise =  NormalActionNoise(mean=np.zeros(self.act_dim), sigma=0.1*np.ones(self.act_dim))
