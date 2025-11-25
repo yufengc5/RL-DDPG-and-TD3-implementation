@@ -58,7 +58,7 @@ class TD3:
         copy_target(self.Critic2_target, self.Critic2)
 
 
-        # CHANGE 2: The actor network have a lower learning rate as proposed in the TD3 paper
+        # CHANGE 2: The actor and critic networks have the same learning rate
         self.optim_actor = optim.Adam(self.Actor.parameters(), lr=0.001) 
         # CHANGE 3: The critic networks do not have weight decay in TD3
         self.optim_critic1 = optim.Adam(self.Critic1.parameters(), lr=0.001) 
