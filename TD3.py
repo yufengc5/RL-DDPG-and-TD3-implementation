@@ -58,7 +58,7 @@ class TD3:
         copy_target(self.Critic2_target, self.Critic2)
 
 
-        # CHANGE 2: The actor network have a lower learning rate as proposed in the TD3 paper
+        # CHANGE 2: The actor and critic networks have the same learning rate
         self.optim_actor = optim.Adam(self.Actor.parameters(), lr=0.001) 
         # CHANGE 3: The critic networks do not have weight decay in TD3
         self.optim_critic1 = optim.Adam(self.Critic1.parameters(), lr=0.001) 
@@ -77,6 +77,7 @@ class TD3:
         """
         
         all_rewards = []
+        all_meanR = []
         episode_rewards = []
         all_rewards_eval = []
 
@@ -105,6 +106,7 @@ class TD3:
                 all_rewards_eval.append(self.eval_episodes())
                 print('\rTimestep: ', timestep, '/' ,timesteps,' Episode reward: ',np.round(all_rewards_eval[-1]), 'Episode: ', len(all_rewards), 'Mean R', np.mean(all_rewards_eval[-100:]))
                 obs, _ = self.env.reset()
+                all_meanR.append(np.mean(all_rewards_eval[-100:]))
                 all_rewards.append(sum(episode_rewards))
                 episode_rewards = []
                     
@@ -134,9 +136,11 @@ class TD3:
                     soft_update(self.Actor_target, self.Actor, tau=0.005)
 
             if timestep % (timesteps-1) == 0:
+                episode_reward_plot(all_meanR, timestep, window_size=7, step_size=1)
                 episode_reward_plot(all_rewards, timestep, window_size=7, step_size=1)
                 pass
             if len(all_rewards_eval)>10 and np.mean(all_rewards_eval[-5:]) > 220:
+                episode_reward_plot(all_meanR, timestep, window_size=7, step_size=1)
                 episode_reward_plot(all_rewards, timestep, window_size=7, step_size=1)
                 break
         return all_rewards, all_rewards_eval
