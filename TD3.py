@@ -82,10 +82,10 @@ class TD3:
         all_rewards_eval = []
         actor_loss_history = []
         critic_loss_history = []
-        q_estimate_history = []
+        q_real_history = []
         episode_actor_losses = []
         episode_critic_losses = []
-        episode_q_estimates = []
+        episode_q_real = []
 
         def dump_plots(current_step):
             episode_reward_plot(
@@ -114,12 +114,12 @@ class TD3:
                 filename='critic_loss.png',
             )
             episode_reward_plot(
-                q_estimate_history,
+                q_real_history,
                 current_step,
                 window_size=5,
                 step_size=1,
-                ylabel='Estimated Q',
-                filename='q_estimate.png',
+                ylabel='Q Real',
+                filename='q_real.png',
             )
 
         # CHANGE 4: We use Normal Action Noise with mean 0 and std 0.1 as proposed in the TD3 paper
@@ -156,9 +156,9 @@ class TD3:
                 if episode_critic_losses:
                     critic_loss_history.append(float(np.mean(episode_critic_losses)))
                     episode_critic_losses = []
-                if episode_q_estimates:
-                    q_estimate_history.append(float(np.mean(episode_q_estimates)))
-                    episode_q_estimates = []
+                if episode_q_real:
+                    q_real_history.append(float(np.mean(episode_q_real)))
+                    episode_q_real = []
                     
             if len(self.replay_buffer) > self.batch_size:
                 # if there is enouygh data in the replay buffer, sample a batch and perform an optimization step
@@ -167,7 +167,7 @@ class TD3:
                 # Get the batch data
                 state_batch, action_batch, reward_batch, next_state_batch, terminated_batch, truncated_batch = self.replay_buffer.get(self.batch_size)
                 # Compute the loss for the critics and update the critics networks
-                critic_loss1, critic_loss2 = self.compute_critic_loss((state_batch, action_batch, reward_batch, next_state_batch, terminated_batch, truncated_batch))
+                critic_loss1, critic_loss2, q_real_batch = self.compute_critic_loss((state_batch, action_batch, reward_batch, next_state_batch, terminated_batch, truncated_batch))
                 self.optim_critic1.zero_grad()
                 self.optim_critic2.zero_grad()
                 critic_loss = critic_loss1 + critic_loss2
@@ -175,13 +175,7 @@ class TD3:
                 self.optim_critic1.step()
                 self.optim_critic2.step()
                 episode_critic_losses.append(critic_loss.item() / 2.0)
-
-                with torch.no_grad():
-                    state_tensor = torch.FloatTensor(state_batch).to(device)
-                    action_tensor = torch.FloatTensor(action_batch).to(device)
-                    q1 = self.Critic1(state_tensor, action_tensor)
-                    q2 = self.Critic2(state_tensor, action_tensor)
-                    episode_q_estimates.append(torch.min(q1, q2).mean().item())
+                episode_q_real.append(q_real_batch)
 
                 if self.iter_count % self.delay == 0:
                 # Compute the loss for the actor and update the actor network 
@@ -244,7 +238,7 @@ class TD3:
         loss1 = criterion(q_expected1, target)  
         loss2 = criterion(q_expected2, target)
 
-        return loss1, loss2
+        return loss1, loss2, target.mean().item()
     
 
     def compute_actor_loss(self,batch):

@@ -72,10 +72,10 @@ class DDPG:
         all_rewards_eval = []
         actor_loss_history = []
         critic_loss_history = []
-        q_estimate_history = []
+        q_real_history = []
         episode_actor_losses = []
         episode_critic_losses = []
-        episode_q_estimates = []
+        episode_q_real = []
 
         def dump_plots(current_step):
             episode_reward_plot(all_rewards, current_step, window_size=7, step_size=1)
@@ -104,12 +104,12 @@ class DDPG:
                 filename='critic_loss.png',
             )
             episode_reward_plot(
-                q_estimate_history,
+                q_real_history,
                 current_step,
                 window_size=5,
                 step_size=1,
-                ylabel='Estimated Q',
-                filename='q_estimate.png',
+                ylabel='Q Real',
+                filename='q_real.png',
             )
         
         # We use here OUNoise instead of Gaussian to add some exploration to the agent. OU noise is a stochastic process
@@ -146,9 +146,9 @@ class DDPG:
                 if episode_critic_losses:
                     critic_loss_history.append(float(np.mean(episode_critic_losses)))
                     episode_critic_losses = []
-                if episode_q_estimates:
-                    q_estimate_history.append(float(np.mean(episode_q_estimates)))
-                    episode_q_estimates = []
+                if episode_q_real:
+                    q_real_history.append(float(np.mean(episode_q_real)))
+                    episode_q_real = []
                     
             if len(self.replay_buffer) > self.batch_size:
                 #TODO (6): if there is enough data in the replay buffer, sample a batch and perform an optimization step
@@ -157,17 +157,12 @@ class DDPG:
                 # Get the batch data
                 state_batch, action_batch, reward_batch, next_state_batch, terminated_batch, truncated_batch = self.replay_buffer.get(self.batch_size)
                 # Compute the loss for the critic and update the critic network 
-                critic_loss = self.compute_critic_loss((state_batch, action_batch, reward_batch, next_state_batch, terminated_batch, truncated_batch))
+                critic_loss, q_real_batch = self.compute_critic_loss((state_batch, action_batch, reward_batch, next_state_batch, terminated_batch, truncated_batch))
                 self.optim_critic.zero_grad()
                 critic_loss.backward()
                 self.optim_critic.step()
                 episode_critic_losses.append(critic_loss.item())
-
-                with torch.no_grad():
-                    state_tensor = torch.FloatTensor(state_batch).to(device)
-                    action_tensor = torch.FloatTensor(action_batch).to(device)
-                    q_values = self.Critic(state_tensor, action_tensor)
-                    episode_q_estimates.append(q_values.mean().item())
+                episode_q_real.append(q_real_batch)
 
                 # Compute the loss for the actor and update the actor network 
                 actor_loss = self.compute_actor_loss((state_batch, action_batch, reward_batch, next_state_batch, terminated_batch, truncated_batch))
@@ -223,15 +218,16 @@ class DDPG:
         terminated_batch = torch.FloatTensor(terminated_batch).to(device).unsqueeze(1)
         truncated_batch = torch.FloatTensor(truncated_batch).to(device).unsqueeze(1)
 
-        q_targets_next = self.Critic_target(next_state_batch, self.Actor_target(next_state_batch))                                              
-        target = reward_batch + (1-(terminated_batch)) *self.gamma*q_targets_next
+        with torch.no_grad():
+            q_targets_next = self.Critic_target(next_state_batch, self.Actor_target(next_state_batch))                                              
+            target = reward_batch + (1-(terminated_batch)) *self.gamma*q_targets_next
         q_expected = self.Critic(state_batch, action_batch)
 
         criterion = nn.MSELoss()
         loss = criterion(q_expected, target)  
 
         # END TODO (4)
-        return loss
+        return loss, target.mean().item()
     
 
     def compute_actor_loss(self,batch):
