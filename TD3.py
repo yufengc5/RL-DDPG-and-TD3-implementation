@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 from ActorCriticNetworks import ActorNetwork, CriticNetwork, copy_target, soft_update
 from ReplayBuffer import ReplayBuffer
-from helper import episode_reward_plot, video_agent
+from helper import episode_reward_plot, plot,video_agent
 import numpy as np
 from Noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise
 from gymnasium.wrappers import RecordVideo
@@ -41,6 +41,10 @@ class TD3:
         self.delay = 2
         self.iter_count = 0
         self.noise_clip = 0.5
+        self.all_actor_loss = []
+        self.all_critic_loss = []
+        self.all_q_real = []
+        self.episode_q_real = []
 
         # Initialize Actor network and its target network.
         self.Actor = ActorNetwork(self.obs_dim, self.act_dim).to(device)
@@ -78,51 +82,12 @@ class TD3:
         
         all_rewards = []
         all_meanR = []
+        episode_actor_loss = []
+        episode_critic_loss = []
         episode_rewards = []
         all_rewards_eval = []
-        actor_loss_history = []
-        critic_loss_history = []
-        q_estimate_history = []
-        episode_actor_losses = []
-        episode_critic_losses = []
-        episode_q_estimates = []
 
-        def dump_plots(current_step):
-            episode_reward_plot(
-                all_meanR,
-                current_step,
-                window_size=7,
-                step_size=1,
-                ylabel='Mean Reward',
-                filename='meanR.png',
-            )
-            episode_reward_plot(all_rewards, current_step, window_size=7, step_size=1)
-            episode_reward_plot(
-                actor_loss_history,
-                current_step,
-                window_size=5,
-                step_size=1,
-                ylabel='Actor Loss',
-                filename='actor_loss.png',
-            )
-            episode_reward_plot(
-                critic_loss_history,
-                current_step,
-                window_size=5,
-                step_size=1,
-                ylabel='Critic Loss',
-                filename='critic_loss.png',
-            )
-            episode_reward_plot(
-                q_estimate_history,
-                current_step,
-                window_size=5,
-                step_size=1,
-                ylabel='Estimated Q',
-                filename='q_estimate.png',
-            )
-
-        # CHANGE 4: We use Normal Action Noise with mean 0 and std 0.1 as proposed in the TD3 paper
+        # CHANGE 4: We use Normal Action Noise with mean 0 and std 0.1
         NANoise =  NormalActionNoise(mean=np.zeros(self.act_dim), sigma=0.1*np.ones(self.act_dim))
 
         obs, _ = self.env.reset()
@@ -133,8 +98,7 @@ class TD3:
             # Here we sample and add the noise to the action to explore the environment. Notice we clip the action
             # between -1 and 1 because the action space is continuous and bounded between -1 and 1.
             
-            # The noise is also clipped as proposed in the TD3 paper (NOT EXECUTED YET)
-            epsilon= NANoise.sample().clip(-self.noise_clip, self.noise_clip)
+            epsilon= NANoise.sample()
             action = np.clip(action + epsilon, -1, 1)
 
             next_obs, reward, terminated, truncated, _ = self.env.step(action)
@@ -150,18 +114,16 @@ class TD3:
                 all_meanR.append(np.mean(all_rewards_eval[-100:]))
                 all_rewards.append(sum(episode_rewards))
                 episode_rewards = []
-                if episode_actor_losses:
-                    actor_loss_history.append(float(np.mean(episode_actor_losses)))
-                    episode_actor_losses = []
-                if episode_critic_losses:
-                    critic_loss_history.append(float(np.mean(episode_critic_losses)))
-                    episode_critic_losses = []
-                if episode_q_estimates:
-                    q_estimate_history.append(float(np.mean(episode_q_estimates)))
-                    episode_q_estimates = []
+                self.all_actor_loss.append(np.mean(episode_actor_loss))
+                self.all_critic_loss.append(np.mean(episode_critic_loss))
+                self.all_q_real.append(np.mean(self.episode_q_real))
+
+            episode_actor_loss = []
+            episode_critic_loss = []
+            self.episode_q_real = []
                     
             if len(self.replay_buffer) > self.batch_size:
-                # if there is enouygh data in the replay buffer, sample a batch and perform an optimization step
+                # if there is enougth data in the replay buffer, sample a batch and perform an optimization step
                 # Batch is sampled from the replay buffer and containes a list of tuples (s, a, r, s', term, trunc)
 
                 # Get the batch data
@@ -174,33 +136,30 @@ class TD3:
                 critic_loss.backward()
                 self.optim_critic1.step()
                 self.optim_critic2.step()
-                episode_critic_losses.append(critic_loss.item() / 2.0)
+                episode_critic_loss.append(critic_loss.item())
 
-                with torch.no_grad():
-                    state_tensor = torch.FloatTensor(state_batch).to(device)
-                    action_tensor = torch.FloatTensor(action_batch).to(device)
-                    q1 = self.Critic1(state_tensor, action_tensor)
-                    q2 = self.Critic2(state_tensor, action_tensor)
-                    episode_q_estimates.append(torch.min(q1, q2).mean().item())
-
+                # Delayed policy updates, update the actor and target networks every 'delay' iterations
                 if self.iter_count % self.delay == 0:
                 # Compute the loss for the actor and update the actor network 
                     actor_loss = self.compute_actor_loss((state_batch, action_batch, reward_batch, next_state_batch, terminated_batch, truncated_batch))
                     self.optim_actor.zero_grad()
                     actor_loss.backward()
                     self.optim_actor.step() 
-                    episode_actor_losses.append(actor_loss.item())
+                    episode_actor_loss.append(actor_loss.item())
                     soft_update(self.Critic1_target, self.Critic1, tau=0.005)
                     soft_update(self.Critic2_target, self.Critic2, tau=0.005)
                     soft_update(self.Actor_target, self.Actor, tau=0.005)
 
             if timestep % (timesteps-1) == 0:
-                dump_plots(timestep)
+                episode_reward_plot(all_rewards, timestep, window_size=7, step_size=1)
                 pass
             if len(all_rewards_eval)>10 and np.mean(all_rewards_eval[-5:]) > 220:
-                dump_plots(timestep)
+                episode_reward_plot(all_rewards, timestep, window_size=7, step_size=1)
+                plot(all_meanR, "meanR", "TD3_meanR.png")
+                plot(self.all_critic_loss, "CriticLoss", "TD3_criticloss.png")
+                plot(self.all_actor_loss, "ActorLoss", "TD3_actorloss.png")
+                plot(self.all_q_real, "q_real", "TD3_q_real.png")
                 break
-
         return all_rewards, all_rewards_eval
     
 
@@ -231,11 +190,16 @@ class TD3:
         terminated_batch = torch.FloatTensor(terminated_batch).to(device).unsqueeze(1)
         truncated_batch = torch.FloatTensor(truncated_batch).to(device).unsqueeze(1)
 
+        noise =  NormalActionNoise(mean=np.zeros(self.act_dim), sigma=0.2*np.ones(self.act_dim))
 
-        # CHANGE 5: Use the minimum of the two critic target networks to compute the target Q values
         with torch.no_grad():
-            q_targets_next1 = self.Critic1_target(next_state_batch, self.Actor_target(next_state_batch))
-            q_targets_next2 = self.Critic2_target(next_state_batch, self.Actor_target(next_state_batch))
+            # CHANGE 5: Target policy smoothing: add clipped noise to target actions
+            epsilon = torch.FloatTensor(noise.sample()).to(device)
+            epsilon = epsilon.clamp(-self.noise_clip, self.noise_clip)
+            next_action = (self.Actor_target(next_state_batch) + epsilon).clamp(-1, 1)
+            q_targets_next1 = self.Critic1_target(next_state_batch, next_action)
+            q_targets_next2 = self.Critic2_target(next_state_batch, next_action)
+            # CHANGE 6: We use the minimum of the two critic target networks to compute the target Q values
             q_targets_next = torch.min(q_targets_next1, q_targets_next2)
             target = reward_batch + (1-(terminated_batch)) *self.gamma*q_targets_next
         q_expected1 = self.Critic1(state_batch, action_batch)  
@@ -243,6 +207,7 @@ class TD3:
         criterion = nn.MSELoss()
         loss1 = criterion(q_expected1, target)  
         loss2 = criterion(q_expected2, target)
+        self.episode_q_real.append(target.mean().item())
 
         return loss1, loss2
     
