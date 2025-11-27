@@ -70,6 +70,47 @@ class DDPG:
         all_rewards = []
         episode_rewards = []
         all_rewards_eval = []
+        actor_loss_history = []
+        critic_loss_history = []
+        q_estimate_history = []
+        episode_actor_losses = []
+        episode_critic_losses = []
+        episode_q_estimates = []
+
+        def dump_plots(current_step):
+            episode_reward_plot(all_rewards, current_step, window_size=7, step_size=1)
+            episode_reward_plot(
+                all_rewards_eval,
+                current_step,
+                window_size=7,
+                step_size=1,
+                ylabel='Evaluation Reward',
+                filename='evaluation_rewards.png',
+            )
+            episode_reward_plot(
+                actor_loss_history,
+                current_step,
+                window_size=5,
+                step_size=1,
+                ylabel='Actor Loss',
+                filename='actor_loss.png',
+            )
+            episode_reward_plot(
+                critic_loss_history,
+                current_step,
+                window_size=5,
+                step_size=1,
+                ylabel='Critic Loss',
+                filename='critic_loss.png',
+            )
+            episode_reward_plot(
+                q_estimate_history,
+                current_step,
+                window_size=5,
+                step_size=1,
+                ylabel='Estimated Q',
+                filename='q_estimate.png',
+            )
         
         # We use here OUNoise instead of Gaussian to add some exploration to the agent. OU noise is a stochastic process
         # that generates a random sample from a Gaussian distribution whose value at time t depends on the previous value
@@ -99,6 +140,15 @@ class DDPG:
                 obs, _ = self.env.reset()
                 all_rewards.append(sum(episode_rewards))
                 episode_rewards = []
+                if episode_actor_losses:
+                    actor_loss_history.append(float(np.mean(episode_actor_losses)))
+                    episode_actor_losses = []
+                if episode_critic_losses:
+                    critic_loss_history.append(float(np.mean(episode_critic_losses)))
+                    episode_critic_losses = []
+                if episode_q_estimates:
+                    q_estimate_history.append(float(np.mean(episode_q_estimates)))
+                    episode_q_estimates = []
                     
             if len(self.replay_buffer) > self.batch_size:
                 #TODO (6): if there is enough data in the replay buffer, sample a batch and perform an optimization step
@@ -111,12 +161,20 @@ class DDPG:
                 self.optim_critic.zero_grad()
                 critic_loss.backward()
                 self.optim_critic.step()
+                episode_critic_losses.append(critic_loss.item())
+
+                with torch.no_grad():
+                    state_tensor = torch.FloatTensor(state_batch).to(device)
+                    action_tensor = torch.FloatTensor(action_batch).to(device)
+                    q_values = self.Critic(state_tensor, action_tensor)
+                    episode_q_estimates.append(q_values.mean().item())
 
                 # Compute the loss for the actor and update the actor network 
                 actor_loss = self.compute_actor_loss((state_batch, action_batch, reward_batch, next_state_batch, terminated_batch, truncated_batch))
                 self.optim_actor.zero_grad()
                 actor_loss.backward()
                 self.optim_actor.step() 
+                episode_actor_losses.append(actor_loss.item())
 
                 # END TODO (6)
 
@@ -127,11 +185,12 @@ class DDPG:
             # END TODO (7)
 
             if timestep % (timesteps-1) == 0:
-                episode_reward_plot(all_rewards, timestep, window_size=7, step_size=1)
+                dump_plots(timestep)
                 pass
             if len(all_rewards_eval)>10 and np.mean(all_rewards_eval[-5:]) > 220:
-                episode_reward_plot(all_rewards, timestep, window_size=7, step_size=1)
+                dump_plots(timestep)
                 break
+
         return all_rewards, all_rewards_eval
     
 
